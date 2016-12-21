@@ -1,12 +1,12 @@
-import com.sun.org.apache.xerces.internal.impl.xpath.regex.Match;
 import edu.kit.iti.formal.kuromasu.*;
 import org.sat4j.core.VecInt;
+import org.sat4j.minisat.SolverFactory;
 import org.sat4j.specs.ContradictionException;
+import org.sat4j.specs.ISolver;
 import org.sat4j.specs.TimeoutException;
+import org.sat4j.tools.ModelIterator;
 
-import java.lang.reflect.Array;
 import java.util.*;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -285,49 +285,130 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		}
 	}
 
+	private void addTerm(int[][] terms) {
+		for(int[] term : terms) {
+			addClause(term);
+		}
+	}
+
 	private int[][] allOf(int... args) {
-		for(int arg : args) {
-			addClause(arg);
-		}
+		return Arrays.stream(args)
+				.mapToObj(o -> new int[]{o})
+				.toArray(int[][]::new);
 	}
 
-	private void atLeastOneOf(int... args) {
-		addClause(args);
+	private int[][] allOf(int[][]... terms) {
+		return Arrays.stream(terms)
+				.flatMap(Arrays::stream)
+				.toArray(int[][]::new);
 	}
 
-	private void noneOf(int... args) {
-		for(int arg : args) {
-			addClause(-arg);
-		}
+	private int[][] atLeastOneOf(int... args) {
+		return new int[][]{args};
 	}
 
-	private void whenThen(int premise, int... conclusion) {
-		for (int c : conclusion) {
-			atLeastOneOf(-premise, c);
-		}
+	interface IndexBuilder {
+		void build(int i);
 	}
 
-	private void exactlyOneOf(int... args) {
-		int[] rest = new int[args.length - 1];
+	private int[][] atLeastOneOf(int[][]... terms) {
+		final int[][] dis = new int[terms.length][];
+		final ArrayList<int[]> result = new ArrayList<>();
 
-		for(int i = 0; i < args.length; ++i) {
-			for(int j = 0; j < args.length; ++j) {
-				if (i != j) {
-					rest[j < i ? j : j - 1] = -args[j];
+		final IndexBuilder builder = new IndexBuilder() {
+			@Override
+			public void build(int i) {
+				if(i < terms.length) {
+					int[][] src = terms[i];
+					for (int[] v : src) {
+						dis[i] = v;
+						build(i + 1);
+					}
+				} else {
+					result.add(Arrays.stream(dis)
+							.flatMapToInt(Arrays::stream)
+							.toArray());
 				}
 			}
-			whenThen(args[i], rest);
-		}
-		atLeastOneOf(args);
+		};
+
+		builder.build(0);
+
+		return result.toArray(new int[result.size()][]);
 	}
 
-	private void allOrNone(int... args) {
+	private int[][] noneOf(int... args) {
+		return allOf(Arrays.stream(args).map(i -> -i).toArray());
+	}
+
+	private int[][] noneOf(int[][]... terms) {
+		final ArrayList<int[]> result = new ArrayList<>();
+
+		for(int[][] term : terms) {
+			final int[] dis = new int[term.length];
+			final IndexBuilder builder = new IndexBuilder() {
+				@Override
+				public void build(int i) {
+					if (i < term.length) {
+						int[] src = term[i];
+						for (int v : src) {
+							dis[i] = v;
+							build(i + 1);
+						}
+					} else {
+						result.add(Arrays.stream(dis).map(v -> -v).toArray());
+					}
+				}
+			};
+			builder.build(0);
+		}
+
+		return result.toArray(new int[result.size()][]);
+	}
+
+	interface When {
+		int[][] then(int[][] conclusion);
+		int[][] then(int... conclusion);
+	}
+
+	private When when(int[][] premise) {
+		return new When() {
+			@Override
+			public int[][] then(int[][] conclusion) {
+				return atLeastOneOf(noneOf(premise), conclusion);
+			}
+
+			@Override
+			public int[][] then(int... conclusion) {
+				return then(allOf(conclusion));
+			}
+		};
+	}
+
+	private When when(int... premise) {
+		return when(allOf(premise));
+	}
+
+	private int[][] exactlyOneOf(int... args) {
+		int[][][] conds = new int[args.length + 1][][];
 		for(int i = 0; i < args.length; ++i) {
-			whenThen(args[i], rest(i, args));
+			int[] rest = rest(i, args);
+			conds[i] = when(args[i]).then(noneOf(rest));
 		}
+		conds[conds.length - 1] = atLeastOneOf(args);
+		return allOf(conds);
 	}
 
-	private int[] rest(int i, int... list) {
+	private int[][] allOrNone(int... args) {
+		int[][][] conds = new int[args.length][][];
+		for(int i = 0; i < args.length; ++i) {
+			int[] rest = rest(i, args);
+			conds[i] = when(args[i]).then(rest);
+		}
+		return allOf(conds);
+	}
+
+	private int[] rest(int i, int[] list) {
 		int[] rest = new int[list.length - 1];
 		for(int j = 0; j < list.length; ++j) {
 			if (i != j) {
@@ -337,26 +418,36 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		return rest;
 	}
 
-	void test() {
-		allOrNone(1, 2, 3, 4);
-		atLeastOneOf(-2);
+	private void test() throws ContradictionException {
+		//int[][] term = noneOf(allOf(atLeastOneOf(1, 2), atLeastOneOf(3, 4)), allOf(atLeastOneOf(5, 6), atLeastOneOf(7, 8)));
+		int[][] term = allOrNone(1,2,3,4);
+		addTerm(term);
+
+
+		for(int[] t : term) {
+			solver.addClause(new VecInt(t));
+		}
 
 		try {
-			if(solver.isSatisfiable()) {
-				solution.setState(SolutionState.SAT);
-				int[] model = this.solver.model();
-				for (int i = 1; i <= 4; ++i) {
-					System.out.println(i + " -> " + solver.model(i));
+			ModelIterator mi = new ModelIterator(solver, 10);
+			boolean unsat = true;
+			while (mi.isSatisfiable()) {
+				unsat = false;
+				int[] model = mi.model();
+				System.out.println("Instance (" + mi.numberOfModelsFoundSoFar() + "):");
+				for (int m : model) {
+					System.out.println(Math.abs(m) + " -> " + (m > 0));
 				}
-			}else {
-				System.out.println("Not satisfiable!");
+			}
+			if(unsat) {
+				System.out.println("Not satisfiable");
 			}
 		} catch (TimeoutException e) {
 			e.printStackTrace();
 		}
 	}
 
-	public static void main(String[] args) {
+	public static void main(String[] args) throws ContradictionException {
 		new MyKuromasuSolver(new Kuromasu()).test();
 	}
 }
