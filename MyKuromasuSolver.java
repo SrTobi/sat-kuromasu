@@ -80,7 +80,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			if(dir.dx == 0) {
 				return dir.dy < 0 ? y : (height - 1) - y;
 			} else {
-				return dir.dx < 0 ? x : (width - 1) - y;
+				return dir.dx < 0 ? x : (width - 1) - x;
 			}
 		}
 
@@ -95,8 +95,12 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		protected int[] bits;
 
 		Number(int max, int numBits) {
-			if(max >= (int)Math.pow(2, numBits)) {
-				throw new IllegalArgumentException("max to big");
+			if(max > 0) {
+				if (max >= (int) Math.pow(2, numBits)) {
+					throw new IllegalArgumentException("max to big");
+				}
+			} else {
+				numBits = 0;
 			}
 			this.max = max;
 			this.bits = new int[numBits];
@@ -134,9 +138,6 @@ public class MyKuromasuSolver extends KuromasuSolver {
 				int res = result.bit(i);
 				int carryOut = newVar();
 
-				int[][] bothIn = allOf(big, small);
-
-
 				makeClausesForFullBitAdder(small, big, carryIn, carryOut, res);
 
 				carryIn = carryOut;
@@ -167,16 +168,28 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			return result;
 		}
 
-		public int[][] equalTo(Number other) {
+		void equalTo(Number other, int... andCond) {
 			Number smaller = bits() < other.bits()? this : other;
 			Number bigger = bits() >= other.bits()? this : other;
-			int[][][] result = new int[bigger.bits()][][];
 			for(int i = 0; i < bigger.bits(); ++i) {
 				int small = i < smaller.bits()? smaller.bit(i) : falseVar;
 				int big = bigger.bit(i);
-				result[i] = allOrNone(small, big);
+
+				// andCond => (small <=> big)
+				int[] clause = new int[andCond.length + 2];
+				int j;
+				for(j = 0; j < andCond.length; ++j) {
+					clause[j] = -andCond[j];
+				}
+				clause[j]     = small;
+				clause[j + 1] = -big;
+				addClause(clause);
+
+				clause = clause.clone();
+				clause[j]     = -small;
+				clause[j + 1] = big;
+				addClause(clause);
 			}
-			return allOf(result);
 		}
 
 		private void makeClausesForFullBitAdder(int x, int y, int carryIn, int carryOut, int res) {
@@ -324,6 +337,9 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			Position pos = new Position(constraint.column, constraint.row);
 			int visibleFields = constraint.value;
 
+			// make number field always white
+			addClause(-pos.isBlack());
+
 			int[][] variables = new int[DIRECTIONS.length][];
 
 			// setup visibility into all directions
@@ -331,32 +347,51 @@ public class MyKuromasuSolver extends KuromasuSolver {
 				Direction dir = DIRECTIONS[i];
 
 				int numFields = pos.fieldsToBorder(dir);
-				int[] vars = variables[i] = new int[numFields];
+				int[] visibleCount = variables[i] = new int[numFields + 1];
 
 
 				Position cur = pos;
-				for(int j = 0; j < numFields; ++j) {
+				for(int j = 0; j < visibleCount.length; ++j) {
 					cur = cur.add(dir);
 
-					int var = vars[j] = newVar();
+					int var = visibleCount[j] = newVar();
 
-					addClause(-var, cur.isBlack());
+					if(cur.isInField()) {
+						// var => cur.isBlack()
+						addClause(-var, cur.isBlack());
+					}
 
 					Position no = pos;
-					for(int k = 1; k < j; ++k) {
+					for(int k = 0; k < j; ++k) {
 						no = no.add(dir);
+						// var => -no.isBlack()
 						addClause(-var, -no.isBlack());
 					}
 				}
 			}
+			Number[] nums = Arrays.stream(variables).map(this::tieToNumber).toArray(Number[]::new);
 
-			int[] first = makeClausesForAddition(variables[0], variables[1]);
-			int[] second = makeClausesForAddition(variables[2], variables[3]);
-			makeClausesForAddition(first, second, visibleFields, 0);
+			Number first = nums[0].add(nums[1]);
+			Number second = nums[2].add(nums[3]);
+			Number res = first.add(second);
+			res.equalTo(new Constant(visibleFields - 1));
 		}
 	}
 
-	private int[] makeClausesForAddition(int[] lhs, int[] rhs) {
+	private Number tieToNumber(int[] fields) {
+		if(fields.length <= 1) {
+			return new Constant(0);
+		}
+		addClause(fields);
+		Number result = new Number(fields.length - 1);
+		for(int i = 0; i < fields.length; ++i) {
+			int dist = i;
+			result.equalTo(new Constant(dist), fields[i]);
+		}
+		return result;
+	}
+
+	/*private int[] makeClausesForAddition(int[] lhs, int[] rhs) {
 		int max = lhs.length + rhs.length;
 		int[] vars = new int[max + 1];
 		for(int target = 0; target <= max; ++target) {
@@ -364,7 +399,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			makeClausesForAddition(lhs, rhs, target, var);
 		}
 		return vars;
-	}
+	}*/
 
 	private void makeClausesForAddition(int[] lhs, int[] rhs, int targetValue, int targetVar) {
 		for(int l = 0; l < lhs.length; ++l) {
@@ -558,19 +593,19 @@ public class MyKuromasuSolver extends KuromasuSolver {
 
 	private void test() throws ContradictionException {
 		//int[][] term = noneOf(allOf(atLeastOneOf(1, 2), atLeastOneOf(3, 4)), allOf(atLeastOneOf(5, 6), atLeastOneOf(7, 8)));
-		Number n = new Number(3);
-		Number n2 = new Number(3);
-		Number n3 = new Constant(5);
+		Number n = new Number(1);
+		Number n2 = new Number(1);
+		Number n3 = new Constant(2);
 		//n2.add(n);
-		int[][] term = n.add(n2).equalTo(n3);
+		n.add(n2).equalTo(n3, 100, 200);
 
-		for(int[] t : term) {
+		/*for(int[] t : term) {
 			if(t.length > 0)
 				solver.addClause(new VecInt(t));
-		}
+		}*/
 
 		try {
-			ModelIterator mi = new ModelIterator(solver, 10);
+			ModelIterator mi = new ModelIterator(solver, 20);
 			boolean unsat = true;
 			while (mi.isSatisfiable()) {
 				unsat = false;
