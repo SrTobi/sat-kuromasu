@@ -1,6 +1,6 @@
 out/
 gen/
-riddles-*/
+riddles*/
 !riddles-org/
 .idea/
 *.iml
