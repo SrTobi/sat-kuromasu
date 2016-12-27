@@ -7,6 +7,8 @@ import org.sat4j.specs.TimeoutException;
 import org.sat4j.tools.ModelIterator;
 
 import java.util.*;
+import java.util.function.Function;
+import java.util.function.IntUnaryOperator;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -59,6 +61,8 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		int isBlack() {
 			return toindex() + 1;
 		}
+
+		int needsArrow() { return numFields + toindex() + 1; }
 
 		private boolean isInField() {
 			return 0 <= x && x < width
@@ -250,12 +254,17 @@ public class MyKuromasuSolver extends KuromasuSolver {
 	private static final Direction WEST = new Direction(-1, 0);
 	private static final Direction EAST = new Direction(1, 0);
 
+	private static final Direction NORTH_WEST = new Direction(-1, -1);
+	private static final Direction NORTH_EAST = new Direction( 1, -1);
+	private static final Direction SOUTH_WEST = new Direction(-1,  1);
+	private static final Direction SOUTH_EAST = new Direction( 1,  1);
+
 	private static final Direction[] DIRECTIONS = new Direction[] {
 			NORTH, SOUTH, WEST, EAST
 	};
 
-	static final Direction[] SOUTH_EAST = new Direction[] {
-			SOUTH, EAST
+	private static final Direction[] DIAG_DIRS = new Direction[] {
+			NORTH_WEST, SOUTH_WEST, SOUTH_EAST, NORTH_EAST
 	};
 
 	private int numFields;
@@ -270,7 +279,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		this.width = k.getWidth();
 		this.height = k.getHeight();
 		this.numFields = k.getHeight() * k.getWidth();
-		this.nextVar = numFields + 1;
+		this.nextVar = numFields * 2 + 1;
 
 		// register static vars
 		falseVar = newVar();
@@ -285,6 +294,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		// 1. Berechne die Klauselmenge für das in der Membervariable 'game'
 		makeClausesForNeighbourCondition();
 		makeClausesForVisibilityCondition();
+		int[][][] arrows = makeClausesForReachabilityCondition();
 
 		// 2. Rufe den SAT KuromasuSolver auf.
 		try {
@@ -298,6 +308,19 @@ public class MyKuromasuSolver extends KuromasuSolver {
 					solution.setField(pos.y, pos.x, isBlack ?FieldValue.BLACK : FieldValue.WHITE);
 				}
 
+				for(int y = 0; y < width; ++y) {
+					for(int x = 0; x < height; ++x) {
+						for(int i = 0; i < DIAG_DIRS.length; ++i) {
+							int var = arrows[x][y][i];
+							System.out.print(var > 0 == solver.model(Math.abs(var))? "A" : "H");
+							//System.out.print(solver.model(new Position(x, y).needsArrow())? "J" : "N");
+						}
+						System.out.print("|");
+					}
+					System.out.println();
+				}
+
+				solution.show();
 			}else {
 				solution.setState(SolutionState.UNSAT);
 			}
@@ -376,6 +399,77 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			Number res = first.add(second);
 			res.equalTo(new Constant(visibleFields - 1));
 		}
+	}
+
+	private int[][][] makeClausesForReachabilityCondition() {
+		int[][][] arrowPointsAway = new int[width][height][DIAG_DIRS.length];
+		int outsideNeedsArrow = newVar();
+		for(int x = 0; x < width; ++x) {
+			for(int y = 0; y < height; ++y) {
+				Position pos = new Position(x, y);
+
+				// init arrowPointsAway
+				int[] arrowAway = arrowPointsAway[x][y];
+				for(int i = 0; i < DIAG_DIRS.length; ++i) {
+					if(arrowAway[i] == 0) {
+						Direction dir = DIAG_DIRS[i];
+						Position to = pos.add(dir);
+						if(to.isInField()) {
+							int var = arrowAway[i] = newVar();
+							// the value for 'to' points exactly in the opposite direction
+							arrowPointsAway[to.x][to.y][(i + 2) % DIAG_DIRS.length] = -var;
+						}else {
+							// can not point into border; only from border to field
+							arrowAway[i] = trueVar;
+						}
+					}
+				}
+
+				// only black fields need an arrow
+				// pos.needsArrow() => pos.isBlack()
+				addClause(-pos.needsArrow(), pos.isBlack());
+
+				for(int i = 0; i < DIAG_DIRS.length; ++i) {
+					Position fst = pos.add(DIAG_DIRS[i]);
+					for(int j = i + 1; j < DIAG_DIRS.length; ++j) {
+						Position snd = pos.add(DIAG_DIRS[j]);
+
+						// 1) pos has >1 black neighbours => pos needs arrow
+						if(fst.isInField() && snd.isInField()) {
+							// (pos.isBlack() & fst.isBlack() & snd.isBlack()) => pos.needsArrow()
+							addClause(-pos.isBlack(), -fst.isBlack(), -snd.isBlack(), pos.needsArrow());
+						}else if(fst.isInField() || snd.isInField()) {
+							// exactly one is inField; the other is the border
+							if(fst.isInField()) {
+								// (pos.isBlack() & fst.isBlack()) => pos.needsArrow()
+								addClause(-pos.isBlack(), -fst.isBlack(), pos.needsArrow());
+							} else {
+								// (pos.isBlack() & snd.isBlack()) => pos.needsArrow()
+								addClause(-pos.isBlack(), -snd.isBlack(), pos.needsArrow());
+							}
+						}
+
+						// 2) make sure max one arrow points away from a field that needs an arrow
+						// pos.needsArrow() => -arrowAway[i] | -arrowAway[j]
+						if(fst.isInField() || snd.isInField()) {
+							addClause(-pos.needsArrow(), -arrowAway[i], -arrowAway[j]);
+						}
+					}
+
+					// 3) make sure arrows only point to a black field
+					if(fst.isInField()) {
+						// pos.needsArrow() => (arrowAway[i] => fst.isBlack())
+						addClause(-pos.needsArrow(), -arrowAway[i], fst.isBlack());
+					}
+				}
+
+				// 2) make sure at least one arrow points away
+				// pos.needsArrow() => one of arrowAway
+				addTerm(when(pos.needsArrow()).then(atLeastOneOf(arrowAway)));
+
+			}
+		}
+		return arrowPointsAway;
 	}
 
 	private Number tieToNumber(int[] fields) {
