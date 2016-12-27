@@ -1,5 +1,6 @@
 out/
 gen/
 riddles-*/
+!riddles-org/
 .idea/
 *.iml
