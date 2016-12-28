@@ -6,6 +6,9 @@ import org.sat4j.specs.ISolver;
 import org.sat4j.specs.TimeoutException;
 import org.sat4j.tools.ModelIterator;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.TemporalUnit;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.IntUnaryOperator;
@@ -291,14 +294,21 @@ public class MyKuromasuSolver extends KuromasuSolver {
 
 	@Override
 	public Solution solve() {
+		Instant startCreation = Instant.now();
 		// 1. Berechne die Klauselmenge für das in der Membervariable 'game'
 		makeClausesForNeighbourCondition();
 		makeClausesForVisibilityCondition();
 		int[][][] arrows = makeClausesForReachabilityCondition();
 
+		Instant afterClauses = Instant.now();
+
 		// 2. Rufe den SAT KuromasuSolver auf.
 		try {
-			if(solver.isSatisfiable()) {
+			boolean solvable = solver.isSatisfiable();
+			Instant afterSolving = Instant.now();
+
+
+			if(solvable) {
 				solution.setState(SolutionState.SAT);
 				int[] model = this.solver.model();
 				for(int idx = 1; idx <= numFields; ++idx)
@@ -308,8 +318,8 @@ public class MyKuromasuSolver extends KuromasuSolver {
 					solution.setField(pos.y, pos.x, isBlack ?FieldValue.BLACK : FieldValue.WHITE);
 				}
 
-				for(int y = 0; y < width; ++y) {
-					for(int x = 0; x < height; ++x) {
+				/*for(int y = 0; y < height; ++y) {
+					for(int x = 0; x < width; ++x) {
 						for(int i = 0; i < DIAG_DIRS.length; ++i) {
 							int var = arrows[x][y][i];
 							System.out.print(var > 0 == solver.model(Math.abs(var))? "A" : "H");
@@ -320,10 +330,14 @@ public class MyKuromasuSolver extends KuromasuSolver {
 					System.out.println();
 				}
 
-				solution.show();
+				//solution.show();*/
+				solution.print();
 			}else {
 				solution.setState(SolutionState.UNSAT);
 			}
+
+			System.out.println("Creation: " + Duration.between(startCreation, afterClauses).toMillis());
+			System.out.println("Solving:  " + Duration.between(afterClauses, afterSolving).toMillis());
 		} catch (TimeoutException e) {
 			e.printStackTrace();
 		}
@@ -341,7 +355,6 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		// Visualize the Solution
 		//solution.show();
 		//, on the terminal
-		solution.print();
 
 		return solution;
 	}
