@@ -443,19 +443,19 @@ public class MyKuromasuSolver extends KuromasuSolver {
 				addClause(-pos.needsArrow(), pos.isBlack());
 
 				for(int i = 0; i < DIAG_DIRS.length; ++i) {
-					Position fst = pos.add(DIAG_DIRS[i]);
+					Position to = pos.add(DIAG_DIRS[i]);
 					for(int j = i + 1; j < DIAG_DIRS.length; ++j) {
 						Position snd = pos.add(DIAG_DIRS[j]);
 
 						// 1) pos has >1 black neighbours => pos needs arrow
-						if(fst.isInField() && snd.isInField()) {
+						if(to.isInField() && snd.isInField()) {
 							// (pos.isBlack() & fst.isBlack() & snd.isBlack()) => pos.needsArrow()
-							addClause(-pos.isBlack(), -fst.isBlack(), -snd.isBlack(), pos.needsArrow());
-						}else if(fst.isInField() || snd.isInField()) {
+							addClause(-pos.isBlack(), -to.isBlack(), -snd.isBlack(), pos.needsArrow());
+						}else if(to.isInField() || snd.isInField()) {
 							// exactly one is inField; the other is the border
-							if(fst.isInField()) {
+							if(to.isInField()) {
 								// (pos.isBlack() & fst.isBlack()) => pos.needsArrow()
-								addClause(-pos.isBlack(), -fst.isBlack(), pos.needsArrow());
+								addClause(-pos.isBlack(), -to.isBlack(), pos.needsArrow());
 							} else {
 								// (pos.isBlack() & snd.isBlack()) => pos.needsArrow()
 								addClause(-pos.isBlack(), -snd.isBlack(), pos.needsArrow());
@@ -464,15 +464,15 @@ public class MyKuromasuSolver extends KuromasuSolver {
 
 						// 2) make sure max one arrow points away from a field that needs an arrow
 						// pos.needsArrow() => -arrowAway[i] | -arrowAway[j]
-						if(fst.isInField() || snd.isInField()) {
+						if(to.isInField() || snd.isInField()) {
 							addClause(-pos.needsArrow(), -arrowAway[i], -arrowAway[j]);
 						}
 					}
 
+					if(to.isInField()) {
 					// 3) make sure arrows only point to a black field
-					if(fst.isInField()) {
 						// pos.needsArrow() => (arrowAway[i] => fst.isBlack())
-						addClause(-pos.needsArrow(), -arrowAway[i], fst.isBlack());
+						addClause(-pos.needsArrow(), -arrowAway[i], to.isBlack());
 					}
 				}
 
