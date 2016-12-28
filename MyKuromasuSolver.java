@@ -363,7 +363,9 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		Iterable<Position> positions = positions()::iterator;
 		for(Position pos : positions) {
 			for(Position neighbour : pos.neighbours()) {
-				addClause(-pos.isBlack(), -neighbour.isBlack());
+				if(pos.toindex() < neighbour.toindex()) {
+					addClause(-pos.isBlack(), -neighbour.isBlack());
+				}
 			}
 		}
 	}
