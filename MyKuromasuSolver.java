@@ -21,6 +21,11 @@ import java.util.stream.Stream;
  */
 public class MyKuromasuSolver extends KuromasuSolver {
 
+	static class PuzzelContradictionException extends Exception {
+		PuzzelContradictionException(String msg) {
+			super(msg);
+		}
+	}
 	static class Direction {
 		final int dx;
 		final int dy;
@@ -294,29 +299,29 @@ public class MyKuromasuSolver extends KuromasuSolver {
 
 	@Override
 	public Solution solve() {
-		Instant startCreation = Instant.now();
-		// 1. Berechne die Klauselmenge für das in der Membervariable 'game'
-		makeClausesForNeighbourCondition();
-		makeClausesForVisibilityCondition();
-		int[][][] arrows = makeClausesForReachabilityCondition();
-
-		Instant afterClauses = Instant.now();
-
-		// 2. Rufe den SAT KuromasuSolver auf.
 		try {
-			boolean solvable = solver.isSatisfiable();
-			Instant afterSolving = Instant.now();
+			Instant startCreation = Instant.now();
+			// 1. Berechne die Klauselmenge für das in der Membervariable 'game'
+			makeClausesForNeighbourCondition();
+			makeClausesForVisibilityCondition();
+			int[][][] arrows = makeClausesForReachabilityCondition();
+
+			Instant afterClauses = Instant.now();
+
+			// 2. Rufe den SAT KuromasuSolver auf.
+			try {
+				boolean solvable = solver.isSatisfiable();
+				Instant afterSolving = Instant.now();
 
 
-			if(solvable) {
-				solution.setState(SolutionState.SAT);
-				int[] model = this.solver.model();
-				for(int idx = 1; idx <= numFields; ++idx)
-				{
-					boolean isBlack = solver.model(idx);
-					Position pos = new Position(idx - 1);
-					solution.setField(pos.y, pos.x, isBlack ?FieldValue.BLACK : FieldValue.WHITE);
-				}
+				if (solvable) {
+					solution.setState(SolutionState.SAT);
+					int[] model = this.solver.model();
+					for (int idx = 1; idx <= numFields; ++idx) {
+						boolean isBlack = solver.model(idx);
+						Position pos = new Position(idx - 1);
+						solution.setField(pos.y, pos.x, isBlack ? FieldValue.BLACK : FieldValue.WHITE);
+					}
 
 				/*for(int y = 0; y < height; ++y) {
 					for(int x = 0; x < width; ++x) {
@@ -331,17 +336,19 @@ public class MyKuromasuSolver extends KuromasuSolver {
 				}
 
 				//solution.show();*/
-				solution.print();
-			}else {
-				solution.setState(SolutionState.UNSAT);
+					solution.print();
+				} else {
+					solution.setState(SolutionState.UNSAT);
+				}
+
+				System.out.println("Creation: " + Duration.between(startCreation, afterClauses).toMillis());
+				System.out.println("Solving:  " + Duration.between(afterClauses, afterSolving).toMillis());
+			} catch (TimeoutException e) {
+				e.printStackTrace();
 			}
-
-			System.out.println("Creation: " + Duration.between(startCreation, afterClauses).toMillis());
-			System.out.println("Solving:  " + Duration.between(afterClauses, afterSolving).toMillis());
-		} catch (TimeoutException e) {
-			e.printStackTrace();
+		} catch (PuzzelContradictionException e) {
+			solution.setState(SolutionState.UNSAT);
 		}
-
 		// 3. Lese aus dem SAT KuromasuSolver heraus, welche Felder schwarz/weiß sind.
 
 		//Angeben, ob eine Lösung vorliegt.
@@ -370,10 +377,14 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		}
 	}
 
-	private void makeClausesForVisibilityCondition() {
+	private void makeClausesForVisibilityCondition() throws PuzzelContradictionException {
 		for(NumberConstraint constraint : game.getNumberConstraints()) {
 			Position pos = new Position(constraint.column, constraint.row);
 			int visibleFields = constraint.value;
+
+			if(visibleFields <= 0 || (visibleFields == 1 && width > 1 && height > 1)) {
+				throw new PuzzelContradictionException("Invalid number of visible fields");
+			}
 
 			// make number field always white
 			addClause(-pos.isBlack());
