@@ -27,6 +27,11 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			super(msg);
 		}
 	}
+
+	static class TrivialSolvableException extends Exception {
+		TrivialSolvableException() {}
+	}
+
 	static class Direction {
 		final int dx;
 		final int dy;
@@ -319,8 +324,12 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			Instant startCreation = Instant.now();
 			// 1. Berechne die Klauselmenge für das in der Membervariable 'game'
 			makeClausesForNeighbourCondition();
-			makeClausesForVisibilityCondition();
-			int[][][] arrows = makeClausesForReachabilityCondition();
+			try {
+				makeClausesForVisibilityCondition();
+				makeClausesForReachabilityCondition();
+			} catch (TrivialSolvableException e) {
+
+			}
 
 			Instant afterClauses = Instant.now();
 
@@ -393,12 +402,16 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		}
 	}
 
-	private void makeClausesForVisibilityCondition() throws PuzzelContradictionException {
+	private void makeClausesForVisibilityCondition() throws PuzzelContradictionException, TrivialSolvableException {
+		if (game.getNumberConstraints().isEmpty()) {
+			throw new TrivialSolvableException();
+		}
+
 		for(NumberConstraint constraint : game.getNumberConstraints()) {
 			Position pos = new Position(constraint.column, constraint.row);
 			int visibleFields = constraint.value;
 
-			if(visibleFields <= 0 || (visibleFields == 1 && width > 1 && height > 1)) {
+			if(visibleFields <= 0 || (visibleFields == 1 && width > 1 && height > 1) || visibleFields > maxVisible) {
 				throw new PuzzelContradictionException("Invalid number of visible fields");
 			}
 
