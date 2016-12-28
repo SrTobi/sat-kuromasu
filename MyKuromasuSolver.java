@@ -12,6 +12,7 @@ import java.time.temporal.TemporalUnit;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.IntUnaryOperator;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -94,6 +95,21 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			} else {
 				return dir.dx < 0 ? x : (width - 1) - x;
 			}
+		}
+
+
+		@Override
+		public boolean equals(Object other) {
+			if(!(other instanceof Position)) {
+				return false;
+			}
+			Position oth = (Position)other;
+			return oth.x == x && oth.y == y;
+		}
+
+		@Override
+		public int hashCode() {
+			return toindex();
 		}
 
 		@Override
@@ -430,6 +446,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 	private int[][][] makeClausesForReachabilityCondition() {
 		int[][][] arrowPointsAway = new int[width][height][DIAG_DIRS.length];
 		Number[][] selfReferencingIn = new Number[width][height];
+		Set<Position> numbers = game.getNumberConstraints().stream().map(c -> new Position(c.column, c.row)).collect(Collectors.toSet());
 		Number one = new Constant(1);
 		for(int x = 0; x < width; ++x) {
 			for(int y = 0; y < height; ++y) {
@@ -457,6 +474,11 @@ public class MyKuromasuSolver extends KuromasuSolver {
 							arrowAway[i] = trueVar;
 						}
 					}
+				}
+
+				if (numbers.contains(pos)) {
+					addClause(-pos.needsArrow());
+					continue;
 				}
 
 				// only black fields need an arrow
