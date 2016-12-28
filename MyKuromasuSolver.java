@@ -432,7 +432,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 							// the value for 'to' points exactly in the opposite direction
 							arrowPointsAway[to.x][to.y][(i + 2) % DIAG_DIRS.length] = -var;
 						}else {
-							// can not point into border; only from border to field
+							// if at border, always point into border
 							arrowAway[i] = trueVar;
 						}
 					}
