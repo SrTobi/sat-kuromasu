@@ -416,6 +416,14 @@ public class MyKuromasuSolver extends KuromasuSolver {
 
 	private int[][][] makeClausesForReachabilityCondition() {
 		int[][][] arrowPointsAway = new int[width][height][DIAG_DIRS.length];
+		Number[][] selfReferencingIn = new Number[width][height];
+		Number one = new Constant(1);
+		for(int x = 0; x < width; ++x) {
+			for(int y = 0; y < height; ++y) {
+				selfReferencingIn[x][y] = new Number(width * height / 4);
+			}
+		}
+
 		int outsideNeedsArrow = newVar();
 		for(int x = 0; x < width; ++x) {
 			for(int y = 0; y < height; ++y) {
@@ -470,16 +478,20 @@ public class MyKuromasuSolver extends KuromasuSolver {
 					}
 
 					if(to.isInField()) {
-					// 3) make sure arrows only point to a black field
+						// 3) make sure arrows only point to a black field
 						// pos.needsArrow() => (arrowAway[i] => fst.isBlack())
 						addClause(-pos.needsArrow(), -arrowAway[i], to.isBlack());
+
+						// add counting to the black fields to detect cycles
+						Number pos_num = selfReferencingIn[pos.x][pos.y];
+						Number to_num = selfReferencingIn[to.x][to.y];
+						pos_num.add(one).equalTo(to_num, pos.needsArrow(), arrowAway[i]);
 					}
 				}
 
 				// 2) make sure at least one arrow points away
 				// pos.needsArrow() => one of arrowAway
 				addTerm(when(pos.needsArrow()).then(atLeastOneOf(arrowAway)));
-
 			}
 		}
 		return arrowPointsAway;
