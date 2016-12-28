@@ -382,7 +382,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			for(int i = 0; i < DIRECTIONS.length; ++i) {
 				Direction dir = DIRECTIONS[i];
 
-				int numFields = pos.fieldsToBorder(dir);
+				int numFields = Math.min(visibleFields - 1, pos.fieldsToBorder(dir));
 				int[] visibleCount = variables[i] = new int[numFields + 1];
 
 
