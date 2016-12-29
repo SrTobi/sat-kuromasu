@@ -406,6 +406,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		if (game.getNumberConstraints().isEmpty()) {
 			throw new TrivialSolvableException();
 		}
+		int maxVisible = width + height - 1;
 
 		for(NumberConstraint constraint : game.getNumberConstraints()) {
 			Position pos = new Position(constraint.column, constraint.row);
