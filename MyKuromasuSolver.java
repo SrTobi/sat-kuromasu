@@ -22,14 +22,16 @@ import java.util.stream.Stream;
  */
 public class MyKuromasuSolver extends KuromasuSolver {
 
+	enum FieldKnowledge {
+		Unknown,
+		White,
+		Black
+	}
+
 	static class PuzzelContradictionException extends Exception {
 		PuzzelContradictionException(String msg) {
 			super(msg);
 		}
-	}
-
-	static class TrivialSolvableException extends Exception {
-		TrivialSolvableException() {}
 	}
 
 	static class Direction {
@@ -296,6 +298,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			NORTH_WEST, SOUTH_WEST, SOUTH_EAST, NORTH_EAST
 	};
 
+	private FieldKnowledge[][] knowledge;
 	private int numFields;
 	private int height;
 	private int width;
@@ -316,6 +319,9 @@ public class MyKuromasuSolver extends KuromasuSolver {
 
 		trueVar = newVar();
 		addClause(trueVar);
+
+		knowledge = new FieldKnowledge[width][height];
+		Arrays.stream(knowledge).forEach(col -> Arrays.fill(col, FieldKnowledge.Unknown));
 	}
 
 	@Override
@@ -324,11 +330,22 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			Instant startCreation = Instant.now();
 			// 1. Berechne die Klauselmenge für das in der Membervariable 'game'
 			makeClausesForNeighbourCondition();
-			try {
+			if(!game.getNumberConstraints().isEmpty()) {
 				makeClausesForVisibilityCondition();
 				makeClausesForReachabilityCondition();
-			} catch (TrivialSolvableException e) {
+			}
 
+			// bind known fields
+			for (int x = 0; x < width; ++x) {
+				for (int y = 0; y < height; ++y) {
+					Position pos = new Position(x, y);
+					FieldKnowledge knw = knowledge[x][y];
+					if (knw == FieldKnowledge.Black) {
+						addClause(pos.isBlack());
+					} else if (knw == FieldKnowledge.White) {
+						addClause(-pos.isBlack());
+			}
+				}
 			}
 
 			Instant afterClauses = Instant.now();
@@ -402,10 +419,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		}
 	}
 
-	private void makeClausesForVisibilityCondition() throws PuzzelContradictionException, TrivialSolvableException {
-		if (game.getNumberConstraints().isEmpty()) {
-			throw new TrivialSolvableException();
-		}
+	private void makeClausesForVisibilityCondition() throws PuzzelContradictionException {
 		int maxVisible = width + height - 1;
 
 		for(NumberConstraint constraint : game.getNumberConstraints()) {
@@ -417,9 +431,10 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			}
 
 			// make number field always white
-			addClause(-pos.isBlack());
+			knowledge[pos.x][pos.y] = FieldKnowledge.White;
 
 			int[][] variables = new int[DIRECTIONS.length][];
+			int[] minVisibility = new int[DIRECTIONS.length];
 
 			// setup visibility into all directions
 			for(int i = 0; i < DIRECTIONS.length; ++i) {
