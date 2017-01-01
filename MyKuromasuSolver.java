@@ -336,7 +336,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			}
 
 			// bind known fields
-			for (int x = 0; x < width; ++x) {
+			/*for (int x = 0; x < width; ++x) {
 				for (int y = 0; y < height; ++y) {
 					Position pos = new Position(x, y);
 					FieldKnowledge knw = knowledge[x][y];
@@ -346,7 +346,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 						addClause(-pos.isBlack());
 			}
 				}
-			}
+			}*/
 
 			Instant afterClauses = Instant.now();
 
@@ -378,7 +378,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 				}
 
 				//solution.show();*/
-					solution.print();
+					//solution.print();
 				} else {
 					solution.setState(SolutionState.UNSAT);
 				}
@@ -422,6 +422,14 @@ public class MyKuromasuSolver extends KuromasuSolver {
 	private void makeClausesForVisibilityCondition() throws PuzzelContradictionException {
 		int maxVisible = width + height - 1;
 
+		/*for(NumberConstraint constraint : game.getNumberConstraints()) {
+			Position pos = new Position(constraint.column, constraint.row);
+
+			// make number field always white
+			//addClause(-pos.isBlack());
+			knowledge[pos.x][pos.y] = FieldKnowledge.White;
+		}*/
+
 		for(NumberConstraint constraint : game.getNumberConstraints()) {
 			Position pos = new Position(constraint.column, constraint.row);
 			int visibleFields = constraint.value;
@@ -430,7 +438,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 				throw new PuzzelContradictionException("Invalid number of visible fields");
 			}
 
-			// make number field always white
+			addClause(-pos.isBlack());
 			knowledge[pos.x][pos.y] = FieldKnowledge.White;
 
 			int[][] variables = new int[DIRECTIONS.length][];
