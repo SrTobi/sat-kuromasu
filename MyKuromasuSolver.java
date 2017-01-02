@@ -17,14 +17,14 @@ import java.util.stream.Stream;
  */
 public class MyKuromasuSolver extends KuromasuSolver {
 
-	enum FieldKnowledge {
+	public enum FieldKnowledge {
 		Unknown,
 		White,
 		Black
 	}
 
-	static class PuzzelContradictionException extends Exception {
-		PuzzelContradictionException(String msg) {
+	static class PuzzleContradictionException extends Exception {
+		PuzzleContradictionException(String msg) {
 			super(msg);
 		}
 	}
@@ -61,23 +61,20 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		Position add(Direction other) {
 			return new Position(this.x + other.dx, this.y + other.dy);
 		}
-		Position add(Position other) {
-			return new Position(this.x + other.x, this.y + other.y);
-		}
 
-		int toindex() {
+		int toIndex() {
 			return x + y * width;
 		}
 
 		int isBlack() {
-			return toindex() + 1;
+			return toIndex() + 1;
 		}
 
 		int isWhite() {
 			return -isBlack();
 		}
 
-		int needsArrow() { return numFields + toindex() + 1; }
+		int needsArrow() { return numFields + toIndex() + 1; }
 
 		private boolean isInField() {
 			return 0 <= x && x < width
@@ -115,7 +112,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 
 		@Override
 		public int hashCode() {
-			return toindex();
+			return toIndex();
 		}
 
 		@Override
@@ -126,7 +123,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 
 	class Number {
 		private int max;
-		protected int[] bits;
+		int[] bits;
 
 		Number(int max, int numBits) {
 			if(max > 0) {
@@ -160,7 +157,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			return max;
 		}
 
-		public Number add(Number other) {
+		Number add(Number other) {
 			Number result = new Number(max() + other.max());
 			Number smaller = bits() < other.bits()? this : other;
 			Number bigger = bits() >= other.bits()? this : other;
@@ -345,7 +342,6 @@ public class MyKuromasuSolver extends KuromasuSolver {
 				if (solvable) {
 					// 3. Lese aus dem SAT KuromasuSolver heraus, welche Felder schwarz/weiß sind.
 					solution.setState(SolutionState.SAT);
-					int[] model = this.solver.model();
 					for (int idx = 1; idx <= numFields; ++idx) {
 						boolean isBlack = solver.model(idx);
 						Position pos = new Position(idx - 1);
@@ -362,7 +358,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			} catch (TimeoutException e) {
 				e.printStackTrace();
 			}
-		} catch (PuzzelContradictionException e) {
+		} catch (PuzzleContradictionException e) {
 			solution.setState(SolutionState.UNSAT);
 		}
 
@@ -370,17 +366,19 @@ public class MyKuromasuSolver extends KuromasuSolver {
 	}
 
 	private void makeClausesForNeighbourCondition() {
-		Iterable<Position> positions = positions()::iterator;
-		for(Position pos : positions) {
-			for(Position neighbour : pos.neighbours()) {
-				if(pos.toindex() < neighbour.toindex()) {
-					addClause(pos.isWhite(), neighbour.isWhite());
+		for(int x = 0; x < width; ++x) {
+			for (int y = 0; y < height; ++y) {
+				Position pos = new Position(x, y);
+				for (Position neighbour : pos.neighbours()) {
+					if (pos.toIndex() < neighbour.toIndex()) {
+						addClause(pos.isWhite(), neighbour.isWhite());
+					}
 				}
 			}
 		}
 	}
 
-	private void makeClausesForVisibilityCondition() throws PuzzelContradictionException {
+	private void makeClausesForVisibilityCondition() throws PuzzleContradictionException {
 		int maxGlobalVisibleFields = width + height - 1;
 
 		/*for(NumberConstraint constraint : game.getNumberConstraints()) {
@@ -396,7 +394,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			int targetVisibleFields = constraint.value;
 
 			if(targetVisibleFields <= 0 || (targetVisibleFields == 1 && width > 1 && height > 1) || targetVisibleFields > maxGlobalVisibleFields) {
-				throw new PuzzelContradictionException("Invalid number of visible fields");
+				throw new PuzzleContradictionException("Invalid number of visible fields");
 			}
 
 			addClause(pos.isWhite());
@@ -455,7 +453,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			if (nums.length == 2) {
 				res = nums[0].add(nums[1]);
 			} else if (nums.length == 3) {
-				res = Arrays.stream(nums).reduce(Number::add).get();
+				res = nums[0].add(nums[1]).add(nums[2]);
 			} else if (nums.length == 4) {
 				res = nums[0].add(nums[1]).add(nums[2].add(nums[3]));
 			}
@@ -488,7 +486,6 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			}
 		}
 
-		int outsideNeedsArrow = newVar();
 		for(int x = 0; x < width; ++x) {
 			for(int y = 0; y < height; ++y) {
 				Position pos = new Position(x, y);
@@ -565,13 +562,6 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		}
 	}
 
-	private Stream<Position> positions() {
-		return IntStream
-				.range(0, width)
-				.mapToObj(x -> IntStream.range(0, height).mapToObj(y -> new Position(x, y)))
-				.flatMap(p -> p);
-	}
-
 	private int newVar() {
 		return nextVar++;
 	}
@@ -582,8 +572,6 @@ public class MyKuromasuSolver extends KuromasuSolver {
 	 */
 	private void addClause(int... c) {
 		try {
-			// Debugging:
-			// System.out.println(Arrays.toString(c));
 			solver.addClause(new VecInt(c));
 		} catch (ContradictionException e) {
 			e.printStackTrace();
@@ -594,9 +582,6 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		addClause(args);
 	}
 
-	interface IndexBuilder {
-		void build(int i);
-	}
 
 	interface When {
 		void then(int conclusion);
