@@ -1,19 +1,13 @@
 import edu.kit.iti.formal.kuromasu.*;
 import org.sat4j.core.VecInt;
-import org.sat4j.minisat.SolverFactory;
 import org.sat4j.specs.ContradictionException;
 import org.sat4j.specs.ISolver;
 import org.sat4j.specs.TimeoutException;
 import org.sat4j.tools.ModelIterator;
 
-import java.lang.reflect.Array;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.TemporalUnit;
-import java.util.*;
-import java.util.function.Function;
-import java.util.function.IntUnaryOperator;
-import java.util.stream.Collectors;
+import java.util.Arrays;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -253,7 +247,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			addClause(res, x, y, -carryIn);
 		}
 
-		public String toString(ISolver solver) {
+		String toString(ISolver solver) {
 			StringBuilder bld = new StringBuilder();
 			bld.append("[");
 			int num = 0;
