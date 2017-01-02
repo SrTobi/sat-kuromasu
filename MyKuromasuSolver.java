@@ -6,6 +6,7 @@ import org.sat4j.specs.ISolver;
 import org.sat4j.specs.TimeoutException;
 import org.sat4j.tools.ModelIterator;
 
+import java.lang.reflect.Array;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.TemporalUnit;
@@ -76,6 +77,10 @@ public class MyKuromasuSolver extends KuromasuSolver {
 
 		int isBlack() {
 			return toindex() + 1;
+		}
+
+		int isWhite() {
+			return -isBlack();
 		}
 
 		int needsArrow() { return numFields + toindex() + 1; }
@@ -344,7 +349,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 						addClause(pos.isBlack());
 					} else if (knw == FieldKnowledge.White) {
 						addClause(-pos.isBlack());
-			}
+					}
 				}
 			}*/
 
@@ -375,10 +380,10 @@ public class MyKuromasuSolver extends KuromasuSolver {
 						System.out.print("|");
 					}
 					System.out.println();
-				}
+				}*/
 
-				//solution.show();*/
-					//solution.print();
+					//solution.show();
+					solution.print();
 				} else {
 					solution.setState(SolutionState.UNSAT);
 				}
@@ -413,14 +418,14 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		for(Position pos : positions) {
 			for(Position neighbour : pos.neighbours()) {
 				if(pos.toindex() < neighbour.toindex()) {
-					addClause(-pos.isBlack(), -neighbour.isBlack());
+					addClause(pos.isWhite(), neighbour.isWhite());
 				}
 			}
 		}
 	}
 
 	private void makeClausesForVisibilityCondition() throws PuzzelContradictionException {
-		int maxVisible = width + height - 1;
+		int maxGlobalVisibleFields = width + height - 1;
 
 		/*for(NumberConstraint constraint : game.getNumberConstraints()) {
 			Position pos = new Position(constraint.column, constraint.row);
@@ -432,58 +437,101 @@ public class MyKuromasuSolver extends KuromasuSolver {
 
 		for(NumberConstraint constraint : game.getNumberConstraints()) {
 			Position pos = new Position(constraint.column, constraint.row);
-			int visibleFields = constraint.value;
+			int targetVisibleFields = constraint.value;
 
-			if(visibleFields <= 0 || (visibleFields == 1 && width > 1 && height > 1) || visibleFields > maxVisible) {
+			if(targetVisibleFields <= 0 || (targetVisibleFields == 1 && width > 1 && height > 1) || targetVisibleFields > maxGlobalVisibleFields) {
 				throw new PuzzelContradictionException("Invalid number of visible fields");
 			}
 
-			addClause(-pos.isBlack());
+			addClause(pos.isWhite());
 			knowledge[pos.x][pos.y] = FieldKnowledge.White;
 
-			int[][] variables = new int[DIRECTIONS.length][];
-			int[] minVisibility = new int[DIRECTIONS.length];
+			int[][] visibleCountSlotsTable = new int[DIRECTIONS.length][];
+			int[] minVisibilityTable = new int[DIRECTIONS.length];
 
 			// setup visibility into all directions
 			for(int i = 0; i < DIRECTIONS.length; ++i) {
 				Direction dir = DIRECTIONS[i];
 
-				int numFields = Math.min(visibleFields - 1, pos.fieldsToBorder(dir));
-				int[] visibleCount = variables[i] = new int[numFields + 1];
+				int maxVisibleFieldsIntoDir = Math.min(targetVisibleFields - 1, pos.fieldsToBorder(dir));
+				int visibleFieldsIntoOtherDirs = maxGlobalVisibleFields - maxVisibleFieldsIntoDir;
+				int minVis = minVisibilityTable[i] = Math.max(0, targetVisibleFields - visibleFieldsIntoOtherDirs);
+				int[] visibleCountSlots = visibleCountSlotsTable[i] = new int[maxVisibleFieldsIntoDir + 1];
 
 
 				Position cur = pos;
-				for(int j = 0; j < visibleCount.length; ++j) {
-					cur = cur.add(dir);
-
-					int var = visibleCount[j] = newVar();
-
-					if(cur.isInField()) {
-						// var => cur.isBlack()
-						addClause(-var, cur.isBlack());
+				for (int j = 0; j <= maxVisibleFieldsIntoDir; ++j) {
+					if (0 < j && j <= minVis) {
+						knowledge[cur.x][cur.y] = FieldKnowledge.White;
+						addClause(cur.isWhite());
 					}
 
-					Position no = pos;
-					for(int k = 0; k < j; ++k) {
-						no = no.add(dir);
-						// var => -no.isBlack()
-						addClause(-var, -no.isBlack());
+					cur = cur.add(dir);
+
+					if (j >= minVis) {
+
+						int var = visibleCountSlots[j] = newVar();
+
+						if (cur.isInField()) {
+							// var => cur.isBlack()
+							addClause(-var, cur.isBlack());
+						}
+
+						Position no = pos;
+						for (int k = 0; k < j; ++k) {
+							no = no.add(dir);
+							// var => no.isWhite()
+							if(k >= minVis) {
+								addClause(-var, no.isWhite());
+							}
+						}
 					}
 				}
 			}
-			Number[] nums = Arrays.stream(variables).map(this::tieToNumber).toArray(Number[]::new);
+			Number[] nums = IntStream
+					.range(0, DIRECTIONS.length)
+					.filter(i -> visibleCountSlotsTable[i].length > 1)
+					.mapToObj(i -> tieToNumber(visibleCountSlotsTable[i], minVisibilityTable[i]))
+					.toArray(Number[]::new);
+
+			Number res = nums[0];
+
+			if (nums.length == 2) {
+				res = nums[0].add(nums[1]);
+			} else if (nums.length == 3) {
+				res = Arrays.stream(nums).reduce(Number::add).get();
+			} else if (nums.length == 4) {
+				res = nums[0].add(nums[1]).add(nums[2].add(nums[3]));
+			}
+
+			res.equalTo(new Constant(targetVisibleFields - 1));
+
+			/*Number[] nums = Arrays.stream(variables).map(this::tieToNumber).toArray(Number[]::new);
 
 			Number first = nums[0].add(nums[1]);
 			Number second = nums[2].add(nums[3]);
 			Number res = first.add(second);
-			res.equalTo(new Constant(visibleFields - 1));
+			res.equalTo(new Constant(visibleFields - 1));*/
 		}
+	}
+
+	private Number tieToNumber(int[] fields, int minNum) {
+		int maxNum = fields.length - 1;
+
+		if(minNum == maxNum) {
+			return new Constant(minNum);
+		}
+		addClause(Arrays.copyOfRange(fields, minNum, fields.length));
+		Number result = new Number(maxNum);
+		for(int num = minNum; num <= maxNum; ++num) {
+			result.equalTo(new Constant(num), fields[num]);
+		}
+		return result;
 	}
 
 	private int[][][] makeClausesForReachabilityCondition() {
 		int[][][] arrowPointsAway = new int[width][height][DIAG_DIRS.length];
 		Number[][] selfReferencingIn = new Number[width][height];
-		Set<Position> numbers = game.getNumberConstraints().stream().map(c -> new Position(c.column, c.row)).collect(Collectors.toSet());
 		Number one = new Constant(1);
 		for(int x = 0; x < width; ++x) {
 			for(int y = 0; y < height; ++y) {
@@ -513,7 +561,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 					}
 				}
 
-				if (numbers.contains(pos)) {
+				if (knowledge[pos.x][pos.y] == FieldKnowledge.White) {
 					addClause(-pos.needsArrow());
 					continue;
 				}
@@ -567,19 +615,6 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			}
 		}
 		return arrowPointsAway;
-	}
-
-	private Number tieToNumber(int[] fields) {
-		if(fields.length <= 1) {
-			return new Constant(0);
-		}
-		addClause(fields);
-		Number result = new Number(fields.length - 1);
-		for(int i = 0; i < fields.length; ++i) {
-			int dist = i;
-			result.equalTo(new Constant(dist), fields[i]);
-		}
-		return result;
 	}
 
 	/*private int[] makeClausesForAddition(int[] lhs, int[] rhs) {
