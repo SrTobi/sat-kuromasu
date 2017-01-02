@@ -265,7 +265,6 @@ public class MyKuromasuSolver extends KuromasuSolver {
 	}
 
 	class Constant extends Number {
-
 		Constant(int c) {
 			super(c);
 
@@ -462,27 +461,27 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		}
 	}
 
-	private Number tieToNumber(int[] fields, int minNum) {
-		int maxNum = fields.length - 1;
+	private Number tieToNumber(int[] visibleCountSlots, int minNum) {
+		int maxNum = visibleCountSlots.length - 1;
 
 		if(minNum == maxNum) {
 			return new Constant(minNum);
 		}
-		atLeastOneOf(Arrays.copyOfRange(fields, minNum, fields.length));
+		atLeastOneOf(Arrays.copyOfRange(visibleCountSlots, minNum, visibleCountSlots.length));
 		Number result = new Number(maxNum);
 		for(int num = minNum; num <= maxNum; ++num) {
-			result.equalTo(new Constant(num), fields[num]);
+			result.equalTo(new Constant(num), visibleCountSlots[num]);
 		}
 		return result;
 	}
 
 	private void makeClausesForReachabilityCondition() {
-		int[][][] arrowPointsAway = new int[width][height][DIAG_DIRS.length];
-		Number[][] selfReferencingIn = new Number[width][height];
+		int[][][] arrowPointsAwayMap = new int[width][height][DIAG_DIRS.length];
+		Number[][] selfReferencingInMap = new Number[width][height];
 		Number one = new Constant(1);
 		for(int x = 0; x < width; ++x) {
 			for(int y = 0; y < height; ++y) {
-				selfReferencingIn[x][y] = new Number(width * height / 4);
+				selfReferencingInMap[x][y] = new Number(width * height / 4);
 			}
 		}
 
@@ -491,7 +490,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 				Position pos = new Position(x, y);
 
 				// init arrowPointsAway
-				int[] arrowAway = arrowPointsAway[x][y];
+				int[] arrowAway = arrowPointsAwayMap[x][y];
 				for(int i = 0; i < DIAG_DIRS.length; ++i) {
 					if(arrowAway[i] == 0) {
 						Direction dir = DIAG_DIRS[i];
@@ -499,7 +498,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 						if(to.isInField()) {
 							int var = arrowAway[i] = newVar();
 							// the value for 'to' points exactly in the opposite direction
-							arrowPointsAway[to.x][to.y][(i + 2) % DIAG_DIRS.length] = -var;
+							arrowPointsAwayMap[to.x][to.y][(i + 2) % DIAG_DIRS.length] = -var;
 						}else {
 							// if at border, always point into border
 							arrowAway[i] = trueVar;
@@ -507,6 +506,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 					}
 				}
 
+				// no need to construct the arrow stuff, if the field is white anyway
 				if (knowledge[pos.x][pos.y] == FieldKnowledge.White) {
 					addClause(-pos.needsArrow());
 					continue;
@@ -549,8 +549,8 @@ public class MyKuromasuSolver extends KuromasuSolver {
 						when(pos.needsArrow()).thenOneOf(-arrowAway[i], to.isBlack());
 
 						// add counting to the black fields to detect cycles
-						Number pos_num = selfReferencingIn[pos.x][pos.y];
-						Number to_num = selfReferencingIn[to.x][to.y];
+						Number pos_num = selfReferencingInMap[pos.x][pos.y];
+						Number to_num = selfReferencingInMap[to.x][to.y];
 						pos_num.add(one).equalTo(to_num, pos.needsArrow(), arrowAway[i]);
 					}
 				}
