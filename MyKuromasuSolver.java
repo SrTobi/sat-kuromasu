@@ -1,15 +1,12 @@
 import edu.kit.iti.formal.kuromasu.*;
 import org.sat4j.core.VecInt;
 import org.sat4j.specs.ContradictionException;
-import org.sat4j.specs.ISolver;
 import org.sat4j.specs.TimeoutException;
-import org.sat4j.tools.ModelIterator;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 /**
  * Bitte beschreie deine Implementierung.
@@ -74,7 +71,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			return -isBlack();
 		}
 
-		int needsArrow() { return numFields + toIndex() + 1; }
+		int needsArrow() { return totalNumberOfFields + toIndex() + 1; }
 
 		private boolean isInField() {
 			return 0 <= x && x < width
@@ -243,27 +240,9 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			addClause(res, x, -y, carryIn);
 			addClause(res, x, y, -carryIn);
 		}
-
-		String toString(ISolver solver) {
-			StringBuilder bld = new StringBuilder();
-			bld.append("[");
-			int num = 0;
-			int setter = 1 << bits() - 1;
-			for(int i = bits() - 1; i >= 0; --i) {
-				boolean isSet = solver.model(bit(i));
-				bld.append(isSet? 1 : 0);
-				num |= isSet? setter : 0;
-				setter >>= 1;
-			}
-
-			bld.append("](");
-			bld.append(num);
-			bld.append(")");
-
-			return bld.toString();
-		}
 	}
 
+	// A constant number
 	class Constant extends Number {
 		Constant(int c) {
 			super(c);
@@ -275,38 +254,51 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		}
 	}
 
+	// Axis aligned directions
 	private static final Direction NORTH = new Direction(0, -1);
 	private static final Direction SOUTH = new Direction(0, 1);
 	private static final Direction WEST = new Direction(-1, 0);
 	private static final Direction EAST = new Direction(1, 0);
 
+	// Diagonal direcotions
 	private static final Direction NORTH_WEST = new Direction(-1, -1);
 	private static final Direction NORTH_EAST = new Direction( 1, -1);
 	private static final Direction SOUTH_WEST = new Direction(-1,  1);
 	private static final Direction SOUTH_EAST = new Direction( 1,  1);
 
+	// List with all axis aligned directions
 	private static final Direction[] DIRECTIONS = new Direction[] {
 			NORTH, SOUTH, WEST, EAST
 	};
 
+	// List with all diagonal directions
 	private static final Direction[] DIAG_DIRS = new Direction[] {
 			NORTH_WEST, SOUTH_WEST, SOUTH_EAST, NORTH_EAST
 	};
 
+	// map to save already known fields
 	private FieldKnowledge[][] knowledge;
-	private int numFields;
+
+	// total number of fields
+	private int totalNumberOfFields;
+
+	// height and width of the game's board
 	private int height;
 	private int width;
+
 	private int nextVar;
+	// the one var that is always false
 	private int falseVar;
+
+	// the one var that is always true
 	private int trueVar;
 
 	public MyKuromasuSolver(Kuromasu k) {
 		super(k);
 		this.width = k.getWidth();
 		this.height = k.getHeight();
-		this.numFields = k.getHeight() * k.getWidth();
-		this.nextVar = numFields * 2 + 1;
+		this.totalNumberOfFields = k.getHeight() * k.getWidth();
+		this.nextVar = totalNumberOfFields * 2 + 1;
 
 		// register static vars
 		falseVar = newVar();
@@ -341,7 +333,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 				if (solvable) {
 					// 3. Lese aus dem SAT KuromasuSolver heraus, welche Felder schwarz/weiß sind.
 					solution.setState(SolutionState.SAT);
-					for (int idx = 1; idx <= numFields; ++idx) {
+					for (int idx = 1; idx <= totalNumberOfFields; ++idx) {
 						boolean isBlack = solver.model(idx);
 						Position pos = new Position(idx - 1);
 						solution.setField(pos.y, pos.x, isBlack ? FieldValue.BLACK : FieldValue.WHITE);
@@ -461,6 +453,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		}
 	}
 
+	// ties an array, where one true var defines the value of the number, to a binary number representation
 	private Number tieToNumber(int[] visibleCountSlots, int minNum) {
 		int maxNum = visibleCountSlots.length - 1;
 
@@ -562,6 +555,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		}
 	}
 
+	// Reserves a new variable from the variables-pool
 	private int newVar() {
 		return nextVar++;
 	}
@@ -578,16 +572,18 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		}
 	}
 
+	// Makes clauses so that at least one var in args is true
 	private void atLeastOneOf(int... args) {
 		addClause(args);
 	}
 
-
-	interface When {
+	// Interface for creating implications
+	private interface When {
 		void then(int conclusion);
 		void thenOneOf(int... conclusion);
 	}
 
+	// Starts an implication
 	private When whenAllOf(int... premise) {
 		return new When() {
 			@Override
@@ -606,10 +602,12 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		};
 	}
 
+	// Starts an implication
 	private When when(int premise) {
 		return whenAllOf(premise);
 	}
 
+	// Makes clauses, so that all vars in args at the same time are either true or false.
 	private void allOrNone(int... args) {
 		for(int i = 0; i < args.length; ++i) {
 			for(int j = i + 1; j < args.length; ++j) {
@@ -619,49 +617,10 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		}
 	}
 
+	// Concatenates two arrays
 	private static int[] concat(int[] first, int[] second) {
 		int[] result = Arrays.copyOf(first, first.length + second.length);
 		System.arraycopy(second, 0, result, first.length, second.length);
 		return result;
-	}
-
-	private void test() throws ContradictionException {
-		//int[][] term = noneOf(allOf(atLeastOneOf(1, 2), atLeastOneOf(3, 4)), allOf(atLeastOneOf(5, 6), atLeastOneOf(7, 8)));
-		Number n = new Number(1);
-		Number n2 = new Number(1);
-		Number n3 = new Constant(2);
-		//n2.add(n);
-		n.add(n2).equalTo(n3, 100, 200);
-
-		/*for(int[] t : term) {
-			if(t.length > 0)
-				solver.addClause(new VecInt(t));
-		}*/
-
-		try {
-			ModelIterator mi = new ModelIterator(solver, 20);
-			boolean unsat = true;
-			while (mi.isSatisfiable()) {
-				unsat = false;
-				int[] model = mi.model();
-				System.out.println("Instance (" + mi.numberOfModelsFoundSoFar() + "):");
-				for (int m : model) {
-					System.out.println(Math.abs(m) + " -> " + (m > 0));
-				}
-
-				System.out.println("n = " + n.toString(mi));
-				System.out.println("n2 = " + n2.toString(mi));
-				System.out.println("n3 = " + n3.toString(mi));
-			}
-			if(unsat) {
-				System.out.println("Not satisfiable");
-			}
-		} catch (TimeoutException e) {
-			e.printStackTrace();
-		}
-	}
-
-	public static void main(String[] args) throws ContradictionException {
-		new MyKuromasuSolver(new Kuromasu()).test();
 	}
 }
