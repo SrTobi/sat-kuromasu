@@ -203,7 +203,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			}
 
 			boolean extraBit = result.bits() > bigger.bits();
-			addTerm(allOrNone(carryIn, extraBit? result.bit(result.bits() - 1) : falseVar));
+			allOrNone(carryIn, extraBit? result.bit(result.bits() - 1) : falseVar);
 
 			return result;
 		}
@@ -340,28 +340,16 @@ public class MyKuromasuSolver extends KuromasuSolver {
 				makeClausesForReachabilityCondition();
 			}
 
-			// bind known fields
-			/*for (int x = 0; x < width; ++x) {
-				for (int y = 0; y < height; ++y) {
-					Position pos = new Position(x, y);
-					FieldKnowledge knw = knowledge[x][y];
-					if (knw == FieldKnowledge.Black) {
-						addClause(pos.isBlack());
-					} else if (knw == FieldKnowledge.White) {
-						addClause(-pos.isBlack());
-					}
-				}
-			}*/
-
 			Instant afterClauses = Instant.now();
 
-			// 2. Rufe den SAT KuromasuSolver auf.
 			try {
+				// 2. Rufe den SAT KuromasuSolver auf.
 				boolean solvable = solver.isSatisfiable();
 				Instant afterSolving = Instant.now();
 
 
 				if (solvable) {
+					// 3. Lese aus dem SAT KuromasuSolver heraus, welche Felder schwarz/weiß sind.
 					solution.setState(SolutionState.SAT);
 					int[] model = this.solver.model();
 					for (int idx = 1; idx <= numFields; ++idx) {
@@ -370,19 +358,6 @@ public class MyKuromasuSolver extends KuromasuSolver {
 						solution.setField(pos.y, pos.x, isBlack ? FieldValue.BLACK : FieldValue.WHITE);
 					}
 
-				/*for(int y = 0; y < height; ++y) {
-					for(int x = 0; x < width; ++x) {
-						for(int i = 0; i < DIAG_DIRS.length; ++i) {
-							int var = arrows[x][y][i];
-							System.out.print(var > 0 == solver.model(Math.abs(var))? "A" : "H");
-							//System.out.print(solver.model(new Position(x, y).needsArrow())? "J" : "N");
-						}
-						System.out.print("|");
-					}
-					System.out.println();
-				}*/
-
-					//solution.show();
 					solution.print();
 				} else {
 					solution.setState(SolutionState.UNSAT);
@@ -396,19 +371,6 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		} catch (PuzzelContradictionException e) {
 			solution.setState(SolutionState.UNSAT);
 		}
-		// 3. Lese aus dem SAT KuromasuSolver heraus, welche Felder schwarz/weiß sind.
-
-		//Angeben, ob eine Lösung vorliegt.
-
-
-		//solution.setState(SolutionState.UNSAT);
-		//solution.setState(SolutionState.SAT);
-
-		// Have a lot of fun.
-
-		// Visualize the Solution
-		//solution.show();
-		//, on the terminal
 
 		return solution;
 	}
@@ -505,13 +467,6 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			}
 
 			res.equalTo(new Constant(targetVisibleFields - 1));
-
-			/*Number[] nums = Arrays.stream(variables).map(this::tieToNumber).toArray(Number[]::new);
-
-			Number first = nums[0].add(nums[1]);
-			Number second = nums[2].add(nums[3]);
-			Number res = first.add(second);
-			res.equalTo(new Constant(visibleFields - 1));*/
 		}
 	}
 
@@ -521,7 +476,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		if(minNum == maxNum) {
 			return new Constant(minNum);
 		}
-		addClause(Arrays.copyOfRange(fields, minNum, fields.length));
+		atLeastOneOf(Arrays.copyOfRange(fields, minNum, fields.length));
 		Number result = new Number(maxNum);
 		for(int num = minNum; num <= maxNum; ++num) {
 			result.equalTo(new Constant(num), fields[num]);
@@ -529,7 +484,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		return result;
 	}
 
-	private int[][][] makeClausesForReachabilityCondition() {
+	private void makeClausesForReachabilityCondition() {
 		int[][][] arrowPointsAway = new int[width][height][DIAG_DIRS.length];
 		Number[][] selfReferencingIn = new Number[width][height];
 		Number one = new Constant(1);
@@ -568,7 +523,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 
 				// only black fields need an arrow
 				// pos.needsArrow() => pos.isBlack()
-				addClause(-pos.needsArrow(), pos.isBlack());
+				when(pos.needsArrow()).then(pos.isBlack());
 
 				for(int i = 0; i < DIAG_DIRS.length; ++i) {
 					Position to = pos.add(DIAG_DIRS[i]);
@@ -578,29 +533,29 @@ public class MyKuromasuSolver extends KuromasuSolver {
 						// 1) pos has >1 black neighbours => pos needs arrow
 						if(to.isInField() && snd.isInField()) {
 							// (pos.isBlack() & fst.isBlack() & snd.isBlack()) => pos.needsArrow()
-							addClause(-pos.isBlack(), -to.isBlack(), -snd.isBlack(), pos.needsArrow());
+							whenAllOf(pos.isBlack(), to.isBlack(), snd.isBlack()).then(pos.needsArrow());
 						}else if(to.isInField() || snd.isInField()) {
 							// exactly one is inField; the other is the border
 							if(to.isInField()) {
 								// (pos.isBlack() & fst.isBlack()) => pos.needsArrow()
-								addClause(-pos.isBlack(), -to.isBlack(), pos.needsArrow());
+								whenAllOf(pos.isBlack(), to.isBlack()).then(pos.needsArrow());
 							} else {
 								// (pos.isBlack() & snd.isBlack()) => pos.needsArrow()
-								addClause(-pos.isBlack(), -snd.isBlack(), pos.needsArrow());
+								whenAllOf(pos.isBlack(), snd.isBlack()).then(pos.needsArrow());
 							}
 						}
 
 						// 2) make sure max one arrow points away from a field that needs an arrow
 						// pos.needsArrow() => -arrowAway[i] | -arrowAway[j]
 						if(to.isInField() || snd.isInField()) {
-							addClause(-pos.needsArrow(), -arrowAway[i], -arrowAway[j]);
+							when(pos.needsArrow()).thenOneOf(-arrowAway[i], -arrowAway[j]);
 						}
 					}
 
 					if(to.isInField()) {
 						// 3) make sure arrows only point to a black field
 						// pos.needsArrow() => (arrowAway[i] => fst.isBlack())
-						addClause(-pos.needsArrow(), -arrowAway[i], to.isBlack());
+						when(pos.needsArrow()).thenOneOf(-arrowAway[i], to.isBlack());
 
 						// add counting to the black fields to detect cycles
 						Number pos_num = selfReferencingIn[pos.x][pos.y];
@@ -611,31 +566,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 
 				// 2) make sure at least one arrow points away
 				// pos.needsArrow() => one of arrowAway
-				addTerm(when(pos.needsArrow()).then(atLeastOneOf(arrowAway)));
-			}
-		}
-		return arrowPointsAway;
-	}
-
-	/*private int[] makeClausesForAddition(int[] lhs, int[] rhs) {
-		int max = lhs.length + rhs.length;
-		int[] vars = new int[max + 1];
-		for(int target = 0; target <= max; ++target) {
-			int var = vars[target] = newVar();
-			makeClausesForAddition(lhs, rhs, target, var);
-		}
-		return vars;
-	}*/
-
-	private void makeClausesForAddition(int[] lhs, int[] rhs, int targetValue, int targetVar) {
-		for(int l = 0; l < lhs.length; ++l) {
-			int r = targetValue - l;
-			if(0 <= r && r < rhs.length) {
-				if(targetVar != 0) {
-					addClause(targetVar, -lhs[l], -rhs[r]);
-				} else {
-					addClause(-lhs[l], -rhs[r]);
-				}
+				whenAllOf(pos.needsArrow()).thenOneOf(arrowAway);
 			}
 		}
 	}
@@ -650,6 +581,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 	private int newVar() {
 		return nextVar++;
 	}
+
 	/**
 	 * Adds the given literals as one clause to the sat solver instance.
 	 * @param c the literals
@@ -664,157 +596,54 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		}
 	}
 
-	private void addTerm(int[][] terms) {
-		for(int[] term : terms) {
-			addClause(term);
-		}
-	}
-
-	private int[][] allOf(int... args) {
-		return Arrays.stream(args)
-				.mapToObj(o -> new int[]{o})
-				.toArray(int[][]::new);
-	}
-
-	private int[][] allOf(int[][]... terms) {
-		return Arrays.stream(terms)
-				.flatMap(Arrays::stream)
-				.toArray(int[][]::new);
-	}
-
-	private int[][] atLeastOneOf(int... args) {
-		return new int[][]{args};
+	private void atLeastOneOf(int... args) {
+		addClause(args);
 	}
 
 	interface IndexBuilder {
 		void build(int i);
 	}
 
-	private int[][] atLeastOneOf(int[][]... terms) {
-		final int[][] dis = new int[terms.length][];
-		final ArrayList<int[]> result = new ArrayList<>();
-
-		final IndexBuilder builder = new IndexBuilder() {
-			@Override
-			public void build(int i) {
-				if(i < terms.length) {
-					int[][] src = terms[i];
-					for (int[] v : src) {
-						dis[i] = v;
-						build(i + 1);
-					}
-				} else {
-					result.add(Arrays.stream(dis)
-							.flatMapToInt(Arrays::stream)
-							.toArray());
-				}
-			}
-		};
-
-		builder.build(0);
-
-		return result.toArray(new int[result.size()][]);
-	}
-
-	private int[][] noneOf(int... args) {
-		return allOf(Arrays.stream(args).map(i -> -i).toArray());
-	}
-
-	private int[][] noneOf(int[][]... terms) {
-		final ArrayList<int[]> result = new ArrayList<>();
-
-		for(int[][] term : terms) {
-			final int[] dis = new int[term.length];
-			final IndexBuilder builder = new IndexBuilder() {
-				@Override
-				public void build(int i) {
-					if (i < term.length) {
-						int[] src = term[i];
-						for (int v : src) {
-							dis[i] = v;
-							build(i + 1);
-						}
-					} else {
-						result.add(Arrays.stream(dis).map(v -> -v).toArray());
-					}
-				}
-			};
-			builder.build(0);
-		}
-
-		return result.toArray(new int[result.size()][]);
-	}
-
 	interface When {
-		int[][] then(int[][] conclusion);
-		int[][] then(int... conclusion);
+		void then(int conclusion);
+		void thenOneOf(int... conclusion);
 	}
 
-	private When when(int[][] premise) {
+	private When whenAllOf(int... premise) {
 		return new When() {
 			@Override
-			public int[][] then(int[][] conclusion) {
-				return atLeastOneOf(noneOf(premise), conclusion);
+			public void then(int conclusion) {
+				thenOneOf(conclusion);
 			}
 
 			@Override
-			public int[][] then(int... conclusion) {
-				return then(allOf(conclusion));
+			public void thenOneOf(int... conclusion) {
+				int[] clause = concat(premise, conclusion);
+				for(int i = 0; i < premise.length; ++i) {
+					clause[i] = -clause[i];
+				}
+				addClause(clause);
 			}
 		};
 	}
 
-	private When when(int... premise) {
-		return when(allOf(premise));
+	private When when(int premise) {
+		return whenAllOf(premise);
 	}
 
-	private int[][] exactlyOneOf(int... args) {
-		int[][][] conds = new int[args.length + 1][][];
+	private void allOrNone(int... args) {
 		for(int i = 0; i < args.length; ++i) {
-			int[] rest = rest(i, args);
-			conds[i] = when(args[i]).then(noneOf(rest));
-		}
-		conds[conds.length - 1] = atLeastOneOf(args);
-		return allOf(conds);
-	}
-
-	private int[][] exactlyOneOf(int[][]... args) {
-		int[][][] conds = new int[args.length + 1][][];
-		for(int i = 0; i < args.length; ++i) {
-			int[][][] rest = rest(i, args);
-			conds[i] = when(args[i]).then(noneOf(rest));
-		}
-		conds[conds.length - 1] = atLeastOneOf(args);
-		return allOf(conds);
-	}
-
-	private int[][] allOrNone(int... args) {
-		int[][][] conds = new int[args.length][][];
-		for(int i = 0; i < args.length; ++i) {
-			int[] rest = rest(i, args);
-			conds[i] = when(args[i]).then(rest);
-		}
-		return allOf(conds);
-	}
-
-	private int[] rest(int i, int[] list) {
-		int[] rest = new int[list.length - 1];
-		for(int j = 0; j < list.length; ++j) {
-			if (i != j) {
-				rest[j < i ? j : j - 1] = list[j];
+			for(int j = i + 1; j < args.length; ++j) {
+				addClause( args[i], -args[j]);
+				addClause(-args[i],  args[j]);
 			}
 		}
-		return rest;
 	}
 
-	private int[][][] rest(int i, int[][][] list) {
-		int[][][] rest = new int[list.length - 1][][];
-		for(int j = 0; j < list.length; ++j) {
-			if (i != j) {
-				rest[j < i ? j : j - 1] = list[j];
-			}
-		}
-		return rest;
+	private static int[] concat(int[] first, int[] second) {
+		int[] result = Arrays.copyOf(first, first.length + second.length);
+		System.arraycopy(second, 0, result, first.length, second.length);
+		return result;
 	}
 
 	private void test() throws ContradictionException {
