@@ -4,3 +4,4 @@ riddles*/
 !riddles-org/
 .idea/
 *.iml
+*.class
