@@ -10,7 +10,7 @@ import java.util.stream.IntStream;
 
 /**
  * Bitte beschreie deine Implementierung.
- * @author  DEIN NAME UND MATRIKELNUMMER
+ * @author Tobias Kahlert 1630395
  */
 public class MyKuromasuSolver extends KuromasuSolver {
 
