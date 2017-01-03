@@ -407,6 +407,20 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		// the number of fields visible from a number field is bounded by the board size
 		int maxGlobalVisibleFields = width + height - 1;
 
+		// fields with only one width or height do not work well with the cycle thing
+		// -> force inner fields to be white
+		if(width == 1) {
+			for (int y = 1; y < height - 1; ++y) {
+				know(new Position(0, y), FieldKnowledge.White);
+			}
+		}
+
+		if(height == 1) {
+			for (int x = 1; x < width - 1; ++x) {
+				know(new Position(x, 0), FieldKnowledge.White);
+			}
+		}
+
 		for(NumberConstraint constraint : game.getNumberConstraints()) {
 			Position pos = new Position(constraint.column, constraint.row);
 			int targetVisibleFields = constraint.value;
@@ -421,6 +435,11 @@ public class MyKuromasuSolver extends KuromasuSolver {
 
 			// mark the number field itself as white
 			know(pos, FieldKnowledge.White);
+
+			// if the field is 1 by 1 we are already done
+			if(width * height == 1) {
+				return;
+			}
 
 			int[][] visibleCountSlotsTable = new int[DIRECTIONS.length][];
 			int[] minVisibilityTable = new int[DIRECTIONS.length];
