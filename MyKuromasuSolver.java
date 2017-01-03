@@ -9,8 +9,39 @@ import java.util.Arrays;
 import java.util.stream.IntStream;
 
 /**
- * Bitte beschreie deine Implementierung.
+ * Mein Kuromasu Solver.
+ *
  * @author Tobias Kahlert 1630395
+ *
+ * Die drei Funktionen makeClausesForNeighbourCondition, makeClausesForVisibilityCondition, makeClausesForReachabilityCondition
+ * erzeugen die sat-Klauseln für die drei Regeln von Kuromasu.
+ *
+ * Zum zählen werden binär kodierte Zahlen verwendet, die per voll-bit-addierer zusammen addiert werden können.
+ * Für die Sichtbarkeit gibt es ein paar Tricks schon vorher zu beweisen, dass manche Felder weiß sein müssen.
+ *
+ * Die wirkliche Besonderheit an der Lösung ist, dass der Zusammenhang der weißen Felder nicht über k-Erreichbarkeit modiliert ist,
+ * sondern über das Fehlen von Kreisen bei schwarzen Feldern. Das schließt auch durchgehende Verbindungen von Spielfeldrand zu Spielfeldrand
+ * über schwarze Felder aus. Dazu wird jedem schwarzen Feld, dass min. 2 schwarze Nachbarn hat (Rand ist dabei schwarz), ein Pfeil zugewiesen, der wiederum auf eines des
+ * angrenzendes schwarzes Feld zeigen muss. Zwei Felder dürfen nicht gegenseitig aufeinander zeigen und bei zwei schwarzen Feldern, die beide einen Pfeil brauchen,
+ * muss einer von Beiden auf den anderen Zeigen. Pfeile am Rand müssen in den Rand hineinzeigen.
+ * Gibt es dann zum Beispiel eine Verbindung von schwarzen Feldern vom Norden zum Süden, kann keine Richtung von Pfeilen zugewiesen werden, da immer eine der beiden letzten Regeln verletzt ist.
+ *
+ *      + - - - - +
+ *      |   b     |
+ *      |     b   |     <- Geht nicht, da rechte Seite von linker Seite getrennt... bzw schwarze Verbindung von Oben nach Unten.
+ *      |   b     |
+ *      + - - - - +
+ *
+ * Für Zyklen müssen weiterhin Zahlen vergeben werden, um k-selbstreferenzierung zu verhindern.
+ *
+ *      + - - - - - +
+ *      |           |
+ *      |     b     |   <- Geht nicht, da keine Verbindung von innen nach außen.
+ *      |   b   b   |       Aber Pfeile vergeben möglich (rechts- oder linksherum).
+ *      |     b     |       Aber ist 4-selbstreferenziert! => nicht lösbar
+ *      |           |
+ *      + - - - - - +
+ *
  */
 public class MyKuromasuSolver extends KuromasuSolver {
 
@@ -543,7 +574,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 	 * arrow pointing to an adjacent black field (2.). A black field needs an arrow if it
 	 * has two or more adjacent black fields or is directly located at the border of the board (1.).
 	 * An arrow of a black field can not point to a black field that itself points back to the first field.
-	 * A field can not point into the border.
+	 * A field adjacent to a border has to point into the border.
 	 *
 	 * This prevents border-to-border connections and double-cycles.
 	 * It also gives simple cycles a rotation direction.
