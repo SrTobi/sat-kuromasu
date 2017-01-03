@@ -20,12 +20,14 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		Black
 	}
 
-	static class PuzzleContradictionException extends Exception {
+	// Thrown when it can be proven that the puzzle is not solvable, because of obvious reasons
+	static class PuzzleContradictionException extends RuntimeException {
 		PuzzleContradictionException(String msg) {
 			super(msg);
 		}
 	}
 
+	// A direction on the board
 	static class Direction {
 		final int dx;
 		final int dy;
@@ -41,6 +43,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		}
 	}
 
+	// A position on the board with a x and a y coordinate
 	class Position {
 		final int x;
 		final int y;
@@ -55,33 +58,47 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			this.y = idx / width;
 		}
 
+		// Adds a direction on the position
 		Position add(Direction other) {
 			return new Position(this.x + other.dx, this.y + other.dy);
 		}
 
+		// Returns a unique index of the position
+		//   Only valid for positions, that are on the board
 		int toIndex() {
+			assert isInField();
 			return x + y * width;
 		}
 
+		// Returns the unique black sat-variable for this position.
+		//   The returned variable, when true, indicates that the position has color black.
+		//   Only valid for positions, that are on the board.
 		int isBlack() {
 			return toIndex() + 1;
 		}
 
+		// Returns the unique white sat-variable for this position.
+		//   The returned variable, when true, indicates that the position has color white.
+		//   Only valid for positions, that are on the board.
 		int isWhite() {
 			return -isBlack();
 		}
 
+		// Returns the unique sat-variable for this position, that indicates, that the position needs an arrow
 		int needsArrow() { return totalNumberOfFields + toIndex() + 1; }
 
+		// Returns if the position is on the puzzel board
 		private boolean isInField() {
 			return 0 <= x && x < width
 					&& 0 <= y && y < height;
 		}
 
+		// Returns the axis aligned neighbours of the position
 		private Position[] neighbours() {
 			return neighbours(DIRECTIONS);
 		}
 
+		// Returns the neighbours position in the given dirs
 		private Position[] neighbours(Direction[] dirs) {
 			return Arrays.stream(dirs)
 					.map(this::add)
@@ -89,7 +106,9 @@ public class MyKuromasuSolver extends KuromasuSolver {
 					.toArray(Position[]::new);
 		}
 
+		// Returns the number of fields to the border the given direction
 		private int fieldsToBorder(Direction dir) {
+			assert dir.dx == 0 || dir.dy == 0;
 			if(dir.dx == 0) {
 				return dir.dy < 0 ? y : (height - 1) - y;
 			} else {
@@ -118,6 +137,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		}
 	}
 
+	// A number, represented by binary encoded sat-variables
 	class Number {
 		private int max;
 		int[] bits;
@@ -142,18 +162,22 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			this(max, (int)Math.floor(Math.log(max) / Math.log(2)) + 1);
 		}
 
+		// Number of bits that compose this number
 		int bits() {
 			return bits.length;
 		}
 
+		// The variable of the i'th bit
 		int bit(int i) {
 			return bits[i];
 		}
 
+		// Returns the maximal number, that can be represented by this
 		int max() {
 			return max;
 		}
 
+		// Returns a number that is equal to the sum of this and other
 		Number add(Number other) {
 			Number result = new Number(max() + other.max());
 			Number smaller = bits() < other.bits()? this : other;
@@ -196,6 +220,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			return result;
 		}
 
+		// ensures that other is equal to this, when all variables of andCond are true
 		void equalTo(Number other, int... andCond) {
 			Number smaller = bits() < other.bits()? this : other;
 			Number bigger = bits() >= other.bits()? this : other;
@@ -220,6 +245,7 @@ public class MyKuromasuSolver extends KuromasuSolver {
 			}
 		}
 
+		// creates the logic wirering for a full bit adder
 		private void makeClausesForFullBitAdder(int x, int y, int carryIn, int carryOut, int res) {
 			// Clauses for fullbitadder's output
 			// (carryIn && (x XOR y) || (x && y)) <=> carryOut
@@ -356,6 +382,9 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		return solution;
 	}
 
+	/**
+	 * Ensures that two neighbouring fields are not both black.
+	 */
 	private void makeClausesForNeighbourCondition() {
 		for(int x = 0; x < width; ++x) {
 			for (int y = 0; y < height; ++y) {
@@ -369,27 +398,29 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		}
 	}
 
-	private void makeClausesForVisibilityCondition() throws PuzzleContradictionException {
+	/**
+	 * Ensures that a number field can see exactly as many fields as it's number demands.
+	 * That is achieved by going into all directions from a number field and ensure that
+	 * the sum of all visible fields match the wanted number.
+	 */
+	private void makeClausesForVisibilityCondition() {
+		// the number of fields visible from a number field is bounded by the board size
 		int maxGlobalVisibleFields = width + height - 1;
-
-		/*for(NumberConstraint constraint : game.getNumberConstraints()) {
-			Position pos = new Position(constraint.column, constraint.row);
-
-			// make number field always white
-			//addClause(-pos.isBlack());
-			knowledge[pos.x][pos.y] = FieldKnowledge.White;
-		}*/
 
 		for(NumberConstraint constraint : game.getNumberConstraints()) {
 			Position pos = new Position(constraint.column, constraint.row);
 			int targetVisibleFields = constraint.value;
 
-			if(targetVisibleFields <= 0 || (targetVisibleFields == 1 && width > 1 && height > 1) || targetVisibleFields > maxGlobalVisibleFields) {
-				throw new PuzzleContradictionException("Invalid number of visible fields");
+			if(targetVisibleFields <= 0) {
+				throw new PuzzleContradictionException("Every number field always sees at least one field: itself");
 			}
 
-			addClause(pos.isWhite());
-			knowledge[pos.x][pos.y] = FieldKnowledge.White;
+			if(targetVisibleFields > maxGlobalVisibleFields) {
+				throw new PuzzleContradictionException("Can not see more fields than the board allows");
+			}
+
+			// mark the number field itself as white
+			know(pos, FieldKnowledge.White);
 
 			int[][] visibleCountSlotsTable = new int[DIRECTIONS.length][];
 			int[] minVisibilityTable = new int[DIRECTIONS.length];
@@ -404,40 +435,50 @@ public class MyKuromasuSolver extends KuromasuSolver {
 				int[] visibleCountSlots = visibleCountSlotsTable[i] = new int[maxVisibleFieldsIntoDir + 1];
 
 
+				// setup possible visibilities
 				Position cur = pos;
 				for (int j = 0; j <= maxVisibleFieldsIntoDir; ++j) {
 					if (0 < j && j <= minVis) {
-						knowledge[cur.x][cur.y] = FieldKnowledge.White;
-						addClause(cur.isWhite());
+						// the field must be white
+						know(cur, FieldKnowledge.White);
 					}
 
 					cur = cur.add(dir);
 
-					if (j >= minVis) {
+					if (j >= minVis && (!cur.isInField() || knowledge[cur.x][cur.y] != FieldKnowledge.White)) {
+						// the field may be white
 
+						// var is true <=> j visibility into the direction
 						int var = visibleCountSlots[j] = newVar();
 
 						if (cur.isInField()) {
 							// var => cur.isBlack()
-							addClause(-var, cur.isBlack());
+							when(var).then(cur.isBlack());
 						}
 
+						// if var is true, ensure that all fields between the number field and the wall are white
 						Position no = pos;
 						for (int k = 0; k < j; ++k) {
 							no = no.add(dir);
 							// var => no.isWhite()
-							if(k >= minVis) {
-								addClause(-var, no.isWhite());
+							if(k >= minVis && knowledge[no.x][no.y] != FieldKnowledge.White) {
+								when(var).then(no.isWhite());
 							}
 						}
 					}
 				}
 			}
+
+			// bind slot lists to binary encoded numbers, but only if they aro not exclusively zero
 			Number[] nums = IntStream
 					.range(0, DIRECTIONS.length)
-					.filter(i -> visibleCountSlotsTable[i].length > 1)
+					.filter(i -> visibleCountSlotsTable[i].length > 1 || minVisibilityTable[i] > 0)
 					.mapToObj(i -> tieToNumber(visibleCountSlotsTable[i], minVisibilityTable[i]))
 					.toArray(Number[]::new);
+
+			if(nums.length == 0) {
+				throw new PuzzleContradictionException("Proved that there is no possible correct visibility");
+			}
 
 			Number res = nums[0];
 
@@ -458,16 +499,40 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		int maxNum = visibleCountSlots.length - 1;
 
 		if(minNum == maxNum) {
+			// only one possible value
 			return new Constant(minNum);
 		}
-		atLeastOneOf(Arrays.copyOfRange(visibleCountSlots, minNum, visibleCountSlots.length));
+		// make sure at least one of the vars is true
+		atLeastOneOf(Arrays.stream(visibleCountSlots).filter(var -> var > 0).toArray());
 		Number result = new Number(maxNum);
 		for(int num = minNum; num <= maxNum; ++num) {
-			result.equalTo(new Constant(num), visibleCountSlots[num]);
+			if(visibleCountSlots[num] > 0) {
+				result.equalTo(new Constant(num), visibleCountSlots[num]);
+			}
 		}
 		return result;
 	}
 
+	/**
+	 * Ensures that every white field is connected to every other white field.
+	 *
+	 * Instead of proving the connectivity, this function creates rules that prove
+	 * another property, which implies full-white-field-connectivity:
+	 *   The non-existence of cycles and border-to-border connections of black fields.
+	 *
+	 * This is done by giving every black field, that needs an arrow (1.), exactly one
+	 * arrow pointing to an adjacent black field (2.). A black field needs an arrow if it
+	 * has two or more adjacent black fields or is directly located at the border of the board (1.).
+	 * An arrow of a black field can not point to a black field that itself points back to the first field.
+	 * A field can not point into the border.
+	 *
+	 * This prevents border-to-border connections and double-cycles.
+	 * It also gives simple cycles a rotation direction.
+	 *
+	 * To prevent simple cycles, every black field that needs an arrow must also have a number,
+	 * which is one smaller than the black field's number, the arrow points to.
+	 *
+	 */
 	private void makeClausesForReachabilityCondition() {
 		int[][][] arrowPointsAwayMap = new int[width][height][DIAG_DIRS.length];
 		Number[][] selfReferencingInMap = new Number[width][height];
@@ -555,6 +620,16 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		}
 	}
 
+	// marks a position with a certain knowledge
+	private void know(Position pos, FieldKnowledge knw) {
+		if (knowledge[pos.x][pos.y] == FieldKnowledge.Unknown) {
+			knowledge[pos.x][pos.y] = knw;
+			addClause(knw == FieldKnowledge.White ? pos.isWhite() : pos.isBlack());
+		} else if(knowledge[pos.x][pos.y] != knw) {
+			throw new PuzzleContradictionException("Knowledge contradicts other knowledge");
+		}
+	}
+
 	// Reserves a new variable from the variables-pool
 	private int newVar() {
 		return nextVar++;
@@ -568,7 +643,8 @@ public class MyKuromasuSolver extends KuromasuSolver {
 		try {
 			solver.addClause(new VecInt(c));
 		} catch (ContradictionException e) {
-			e.printStackTrace();
+			//e.printStackTrace();
+			throw new PuzzleContradictionException("Logic contradiction detected");
 		}
 	}
 
