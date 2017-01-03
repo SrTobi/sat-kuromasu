@@ -18,11 +18,13 @@ import java.util.stream.IntStream;
  * Für die Sichtbarkeit gibt es ein paar Tricks schon vorher zu beweisen, dass manche Felder weiß sein müssen.
  *
  * Die wirkliche Besonderheit an der Lösung ist, dass der Zusammenhang der weißen Felder nicht über k-Erreichbarkeit modiliert ist,
- * sondern über das Fehlen von Kreisen bei schwarzen Feldern. Das schließt auch durchgehende Verbindungen von Spielfeldrand zu Spielfeldrand
- * über schwarze Felder aus. Dazu wird jedem schwarzen Feld, dass min. 2 schwarze Nachbarn hat (Rand ist dabei schwarz), ein Pfeil zugewiesen, der wiederum auf eines des
- * angrenzendes schwarzes Feld zeigen muss. Zwei Felder dürfen nicht gegenseitig aufeinander zeigen und bei zwei schwarzen Feldern, die beide einen Pfeil brauchen,
+ * sondern über das Fehlen von Kreisen bei schwarzen Feldern und Verbindungen von Spielfeldrand zu Spielfeldrand
+ * über schwarze Felder. Dazu wird jedem schwarzen Feld, dass mindestens 2 schwarze Nachbarn hat (Rand ist dabei schwarz), ein Pfeil zugewiesen, der wiederum auf eines des
+ * angrenzendes schwarzes Feld (mit möglicherweise nur einem schwarzen Nachbarn -> kein Pfeil) zeigen muss.
+ * Zwei Felder dürfen nicht gegenseitig aufeinander zeigen und bei zwei schwarzen Feldern, die beide einen Pfeil brauchen,
  * muss einer von Beiden auf den anderen Zeigen. Pfeile am Rand müssen in den Rand hineinzeigen.
- * Gibt es dann zum Beispiel eine Verbindung von schwarzen Feldern vom Norden zum Süden, kann keine Richtung von Pfeilen zugewiesen werden, da immer eine der beiden letzten Regeln verletzt ist.
+ * Gibt es dann zum Beispiel eine Verbindung von schwarzen Feldern vom Norden zum Süden, kann keine Richtung von Pfeilen zugewiesen werden,
+ * da immer eine der beiden letzten Regeln verletzt wäre.
  *
  *      + - - - - +
  *      |   b     |
@@ -36,7 +38,7 @@ import java.util.stream.IntStream;
  *      |           |
  *      |     b     |   <- Geht nicht, da keine Verbindung von innen nach außen.
  *      |   b   b   |       Aber Pfeile vergeben möglich (rechts- oder linksherum).
- *      |     b     |       Aber ist 4-selbstreferenziert! => nicht lösbar
+ *      |     b     |       Aber ist 4-selbstreferenziert! => Erreichbarkeitsregel verletzt
  *      |           |
  *      + - - - - - +
  *
