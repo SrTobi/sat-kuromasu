@@ -3,8 +3,6 @@ import org.sat4j.core.VecInt;
 import org.sat4j.specs.ContradictionException;
 import org.sat4j.specs.TimeoutException;
 
-import java.time.Duration;
-import java.time.Instant;
 import java.util.Arrays;
 import java.util.stream.IntStream;
 
@@ -371,7 +369,6 @@ public class MyKuromasuSolver extends KuromasuSolver {
 	@Override
 	public Solution solve() {
 		try {
-			Instant startCreation = Instant.now();
 			// 1. Berechne die Klauselmenge für das in der Membervariable 'game'
 			makeClausesForNeighbourCondition();
 			if(!game.getNumberConstraints().isEmpty()) {
@@ -379,13 +376,9 @@ public class MyKuromasuSolver extends KuromasuSolver {
 				makeClausesForReachabilityCondition();
 			}
 
-			Instant afterClauses = Instant.now();
-
 			try {
 				// 2. Rufe den SAT KuromasuSolver auf.
 				boolean solvable = solver.isSatisfiable();
-				Instant afterSolving = Instant.now();
-
 
 				if (solvable) {
 					// 3. Lese aus dem SAT KuromasuSolver heraus, welche Felder schwarz/weiß sind.
@@ -401,8 +394,6 @@ public class MyKuromasuSolver extends KuromasuSolver {
 					solution.setState(SolutionState.UNSAT);
 				}
 
-				System.out.println("Creation: " + Duration.between(startCreation, afterClauses).toMillis());
-				System.out.println("Solving:  " + Duration.between(afterClauses, afterSolving).toMillis());
 			} catch (TimeoutException e) {
 				e.printStackTrace();
 			}
