@@ -488,6 +488,10 @@ public class MyKuromasuSolver extends KuromasuSolver {
 
 					cur = cur.add(dir);
 
+					if(j == minVis && j == maxVisibleFieldsIntoDir && cur.isInField()) {
+						know(cur, FieldKnowledge.Black);
+					}
+
 					if (j >= minVis && (!cur.isInField() || knowledge[cur.x][cur.y] != FieldKnowledge.White)) {
 						// the field may be white
 
@@ -520,6 +524,9 @@ public class MyKuromasuSolver extends KuromasuSolver {
 					.toArray(Number[]::new);
 
 			if(nums.length == 0) {
+				if(width == 1 || height == 1) {
+					continue;
+				}
 				throw new PuzzleContradictionException("Proved that there is no possible correct visibility");
 			}
 
